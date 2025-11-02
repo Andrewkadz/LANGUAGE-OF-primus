@@ -1,0 +1,7 @@
+numpy>=1.21
+
+# Visualization dependency
+matplotlib>=3.7
+
+# Optional PDF tools for tools/pdf_tools.py
+# pypdf>=4 ; or PyPDF2>=3 ; or pdfminer.six>=20221105
