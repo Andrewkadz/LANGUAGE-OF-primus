@@ -1,0 +1,127 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+import argparse
+from pathlib import Path
+import sys
+
+# Ensure repository root is on sys.path for local package imports
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+# Local engine imports
+try:
+    from primus_engine.parser import parse
+    from primus_engine.reducer import reduce_with_trace
+    from primus_engine.ast import Call, Atom, pretty
+except Exception as e:
+    print(f"Error: failed to import primus_engine modules: {e}")
+    sys.exit(1)
+
+
+def read_terms(path: Path):
+    src = path.read_text(encoding='utf-8')
+    return parse(src)
+
+
+def run_once(paths: list[Path]) -> list[Call]:
+    traces: list[Call] = []
+    for p in paths:
+        terms = read_terms(p)
+        # Reduce each non-header term; parser may leave HDR tokens as terms-less
+        for t in terms:
+            tr = reduce_with_trace(t)
+            traces.append(tr)
+    return traces
+
+
+def write_trace(out_path: Path, traces: list[Call]):
+    txt = "\n".join(pretty(tr) for tr in traces) + "\n"
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(txt, encoding='utf-8')
+
+
+def lift_entry(trace: Call, index: int, to_path: Path):
+    # trace is Σ[ Λ[…], … ]
+    if not (isinstance(trace, Call) and isinstance(trace.head, Atom) and trace.head.sym == 'Σ'):
+        raise ValueError("Lift source must be a Σ[Λ[…], …] trace stream")
+    if index < 0 or index >= len(trace.args):
+        raise IndexError(f"Lift index {index} out of range (0..{len(trace.args)-1})")
+    entry = trace.args[index]
+    # Write a Φπε file with canonical header and the lifted Λ[…] entry
+    body = pretty(entry)
+    content = (
+        "Φπε PRIMUS :: SYMBOL SET\n"
+        "Σ(Φ, Π, Ε, ε, Δ, δ, Ψ, Λ, λ, Γ, Ω, ω, Σ, Ξ, ζ, Τ, Ρ, Θ, n, χ)\n"
+        "Φπε PRIMUS :: OPERATOR SET\n"
+        "Σ(→, +, :, /, |, [], =, ^)\n\n"
+        f"{body}\n"
+    )
+    to_path.parent.mkdir(parents=True, exist_ok=True)
+    to_path.write_text(content, encoding='utf-8')
+
+
+def main(argv: list[str]) -> int:
+    ap = argparse.ArgumentParser(description="ERCA runner (Φπε Primus)")
+    ap.add_argument('paths', nargs='*', help=".phipe files to run (agent and/or prompt)")
+    ap.add_argument('--prompt', dest='prompt', help="Prompt .phipe to run (optional; run alongside agent)")
+    ap.add_argument('--out', dest='out', help="Write traces to this file")
+    ap.add_argument('--lift', dest='lift', type=int, help="Lift Λ[index] from the last run (0-based)")
+    ap.add_argument('--to', dest='to', help="Destination .phipe path for lifted entry")
+    ap.add_argument('--compare', nargs=2, metavar=('A', 'B'), help="Compare two agent files by printing both traces")
+    ap.add_argument('--repeat', type=int, default=1, help="Repeat run N times")
+
+    args = ap.parse_args(argv)
+
+    run_paths: list[Path] = []
+    if args.paths:
+        run_paths.extend(Path(p) for p in args.paths)
+    if args.prompt:
+        run_paths.append(Path(args.prompt))
+
+    # Compare mode: just run A and B once each and print
+    if args.compare:
+        a, b = (Path(args.compare[0]), Path(args.compare[1]))
+        traces_a = run_once([a])
+        traces_b = run_once([b])
+        print("# A:")
+        for tr in traces_a:
+            print(pretty(tr))
+        print("\n# B:")
+        for tr in traces_b:
+            print(pretty(tr))
+        return 0
+
+    last_traces: list[Call] = []
+    for _ in range(max(1, args.repeat)):
+        if not run_paths:
+            print("Usage: erca-run <agent.phipe> [--prompt prompt.phipe] [--out path] [--lift N --to dest] [--repeat N]")
+            return 2
+        last_traces = run_once(run_paths)
+        # Print to stdout unless --out specified
+        if args.out:
+            write_trace(Path(args.out), last_traces)
+        else:
+            for tr in last_traces:
+                print(pretty(tr))
+
+    # Lift after the final run, if requested
+    if args.lift is not None:
+        if not args.to:
+            print("Error: --lift requires --to <dest.phipe>", file=sys.stderr)
+            return 2
+        if not last_traces:
+            print("Error: no traces produced to lift from", file=sys.stderr)
+            return 2
+        # Use the last trace stream from the last term
+        try:
+            lift_entry(last_traces[-1], args.lift, Path(args.to))
+        except (ValueError, IndexError) as e:
+            print(f"Error: {e}", file=sys.stderr)
+            return 2
+
+    return 0
+
+
+if __name__ == '__main__':
+    raise SystemExit(main(sys.argv[1:]))

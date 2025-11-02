@@ -1,0 +1,71 @@
+#!/usr/bin/env python3
+from __future__ import annotations
+import argparse
+from pathlib import Path
+import subprocess
+import sys
+
+# Ensure repo root on sys.path for local imports
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from tools.nl_bridge import english_to_phipe, wrap_prompt_file, phi_trace_to_english
+
+
+def run_erca(agent: Path, prompt_path: Path, out_path: Path) -> int:
+    cmd = [sys.executable, str(REPO_ROOT / 'scripts' / 'erca-run'), str(agent), '--prompt', str(prompt_path), '--out', str(out_path)]
+    return subprocess.call(cmd, cwd=str(REPO_ROOT))
+
+
+def main(argv: list[str]) -> int:
+    ap = argparse.ArgumentParser(description="English↔Φπε bridge CLI")
+    ap.add_argument('--in', dest='text', help='English text to map to Φπε prompt')
+    ap.add_argument('--agent', dest='agent', default='ERCA/ERCA_P3.phipe', help='Agent file (default ERCA/ERCA_P3.phipe)')
+    ap.add_argument('--prompt-out', dest='prompt_out', default=None, help='Path to write generated .phipe prompt')
+    ap.add_argument('--trace-out', dest='trace_out', default=None, help='Path to write trace output')
+    ap.add_argument('--dry-run', action='store_true', help='Only print mapped Φπε, do not execute')
+    ap.add_argument('--summarize', dest='summarize', help='Summarize an existing trace file to English')
+    ap.add_argument('--markdown', action='store_true', help='Format summary as markdown')
+
+    args = ap.parse_args(argv)
+
+    if args.summarize:
+        txt = Path(args.summarize).read_text(encoding='utf-8')
+        print(phi_trace_to_english(txt, markdown=args.markdown), end='')
+        return 0
+
+    if not args.text:
+        print("Usage: nl2phi --in 'english text' [--agent ERCA/ERCA_P3.phipe] [--prompt-out path] [--trace-out path] [--dry-run]", file=sys.stderr)
+        return 2
+
+    # Map English to Φπε body
+    body = english_to_phipe(args.text)
+    prompt_content = wrap_prompt_file(body)
+
+    # Resolve outputs
+    prompt_path = Path(args.prompt_out) if args.prompt_out else (REPO_ROOT / 'ERCA' / 'prompts' / 'N_generated.phipe')
+    trace_path = Path(args.trace_out) if args.trace_out else (REPO_ROOT / 'ERCA' / 'traces' / 'N.trace')
+
+    # Write prompt
+    prompt_path.parent.mkdir(parents=True, exist_ok=True)
+    prompt_path.write_text(prompt_content, encoding='utf-8')
+
+    if args.dry_run:
+        print(prompt_content, end='')
+        return 0
+
+    # Run the agent
+    rc = run_erca(REPO_ROOT / args.agent, prompt_path, trace_path)
+    if rc != 0:
+        return rc
+
+    # Print location and a compact summary
+    print(f"Trace written: {trace_path}")
+    summary = phi_trace_to_english(trace_path.read_text(encoding='utf-8'))
+    print(summary, end='')
+    return 0
+
+
+if __name__ == '__main__':
+    raise SystemExit(main(sys.argv[1:]))

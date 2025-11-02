@@ -1,0 +1,33 @@
+Φπε Archive Index (v1.0)
+
+Root: /Users/andykadziolka/Desktop/NOV1_2025
+
+SPEC
+- SPEC.md — Full Φπε Primus Engine specification (alphabet, operators, grammar, precedence, semantics, trace schema, examples)
+
+Engine (Python)
+- primus_engine/__init__.py — Package init
+- primus_engine/ast.py — Atoms/Terms and pretty printer
+- primus_engine/parser.py — Strict UTF-8 parser, precedence, header recognition
+- primus_engine/reducer.py — Small-step reducer, Π-privacy, intrinsic Ξ thresholds, Λ[…] traces
+- primus_engine/runner.py — CLI runner: prints Σ[Λ[…], …] trace streams for .phipe inputs
+
+Programs (canonical tests)
+- T1.phipe — ε-driven explicit emergence; Σ([Ψ|Ω]×3) → Ξ → Λ =; Ρ : Γ(n)
+- T2.phipe — Ψ(Φ + Δ) : ζ → Ξ = (explicit Ξ via recurrence)
+- T3.phipe — λ(Σ(Ψ | Γ)) : ζ → Λ + Γ → Π (Π-gated entanglement; traces suppressed in Π)
+- T4.phipe — Γ(Δ + Λ) → Ξ → Π (growth into transcendence)
+- T5.phipe — ζ(Ψ + Σ + Λ) : Τ → Ξ + Ω (recurrence + synchronicity → emergence, closure path)
+- T6.phipe — [Δ(Ψ)] → Λ = (intrinsic [ΔΨ] → Ξ via thresholds; render; finalize)
+- T7.phipe — [Δ(Ψ | Φ)] → Λ = (threshold-sensitive orthogonality variant)
+
+Traces (symbolic only)
+- T1.phipe.trace — Full Σ[Λ[…], …] stream for T1
+
+Visual Map
+- Φπε_LanguageMap_v1.0.svg — One-page symbolic reference (alphabet, operators, grammar, precedence, execution model, trace schema, T1–T7 notes)
+
+Notes
+- All traces use Λ[rule, input, output, context, loop, tick] and stream Σ[…].
+- Π-privacy: traces inside Π are suppressed unless lifted.
+- Intrinsic Ξ thresholds (θ_loop=3, θ_alt=2, θ_depth=2, k=5) wired in reducer.
